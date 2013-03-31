@@ -37,6 +37,7 @@ def entity_page():
 	if not data:	
 		department_weights, personal_weights, data = preloader(month)
 	
+	
 # makes an nx graph object
 # calls nxlookup internally to get metrics
 # gets d3 from nx and prepares it, adding labels
