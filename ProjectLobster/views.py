@@ -3,6 +3,7 @@
 import networkx
 import urllib2
 import json
+from itertools import groupby
 from operator import itemgetter
 
 class Lobster():
@@ -41,29 +42,34 @@ class Lobster():
 	def make_nx_graph(self, data):
 		# makes a Nx object from a bunch of data
 			mgraph = networkx.MultiGraph(weighted=True)
+
 			def weighting(self, minister, department):
 				pw = self.personal_weights[minister]
 				dw = self.department_weights[department]
 				return dw/pw
-			def get_ministers_by_meeting(self, data):
-				return groupby(data, key=itemgetter('meeting_hash'))
-			def add_meeting(self, vals):
-				meeting_id = k
-					vals = list(v)
-					item = vals[0]
-					mini = item['Minister']
-					l = [value['lobby'] for value in vals]
-					lobb = [(mini)] + l
-					ranking = weighting(item['Title'], item['Department'])
-					weight = ranking/float(len(l))
-					mgraph.add_star(lobb, weight=weight, purpose=item['Purpose of meeting'], date=item['Date'], meeting_id=item['meeting_hash'])
-					mgraph.node[(mini)]['nodetype'] = 'minister'
-					mgraph.node[(mini)]['minister_weight'] = ranking
-					mgraph.node[(mini)]['Department'] = item['Department']
-					mgraph.node[(mini)]['Title'] = item['Title']
-					mgraph.add_nodes_from(l, nodetype='lobby')
 
-			meetings = get_ministers_by_meeting(data)
+			def get_ministers(data):
+				def gm(row)
+					return row
+				d = json.load(data, object_hook=gm())
+				yield gm
+
+			def add_meeting(self, vals):
+				vals = list(v)
+				item = vals[0]
+				mini = item['Minister']
+				l = [value['lobby'] for value in vals]
+				lobb = [(mini)] + l
+				ranking = weighting(item['Title'], item['Department'])
+				weight = ranking/float(len(l))
+				mgraph.add_star(lobb, weight=weight, purpose=item['Purpose of meeting'], date=item['Date'], meeting_id=item['meeting_hash'])
+				mgraph.node[(mini)]['nodetype'] = 'minister'
+				mgraph.node[(mini)]['minister_weight'] = ranking
+				mgraph.node[(mini)]['Department'] = item['Department']
+				mgraph.node[(mini)]['Title'] = item['Title']
+				mgraph.add_nodes_from(l, nodetype='lobby')
+
+			meetings = groupby(get_ministers(data), key=itemgetter('meeting_id'))
 			for k, v in meetings:
 				vals = list(v)
 				add_meeting(vals)
@@ -90,7 +96,6 @@ class Lobster():
 				data = None
 			self.department_weights = json.load(department_weights)
 			self.personal_weights = json.load(personal_weights)
-			self.data = json.load(data)
 
 		if not self.data:
 			preloader(month)
