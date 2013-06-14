@@ -11,33 +11,57 @@ class Lobster():
 	def _init_(self):
 		self.department_weights = None
 		self.personal_weights = None
-		self.data = None
+		self.datacache = {}
+		self.objectcache = {}
 
-	@app.route('/') # the front page - equivalent to /CurrentMonth
-	def frontpage(self)
+	def preloader(self, month=None):
 
-	# redirects to entity_page with <month> set to current month
+			department_weights = urllib.urlopen('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=project_lobster_constants&query=select%20*%20from%20%60departments%60')
+			personal_weights = urllib.urlopen('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=project_lobster_constants&query=select%20*%20from%20%60ministers%60')
 
-	@app.route('/login', methods=['POST']) # login
-	def login(self)
+			if month:
 
-	# provides a login
+				data = urllib.urlopen(('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=sql_api_for_whoslobbying&query=*%20from%20swdata%20inner%20join%20lobbies%20on%20swdata.meeting_hash%20%3D%20lobbies.meeting_hash%20where%20date%20%3D%20{0}'.format(month)))
+				add_to_cache(month=month, cachetype='data', data)
+	
+			self.department_weights = json.load(department_weights)
+			self.personal_weights = json.load(personal_weights)
+			
 	
 	@classmethod
-	def add_to_cache(self, key, obj):
-		self.cache.update((key)=obj)
+	def add_to_cache(self, name=None, month=None, cachetype=None, obj):
+		key = name + month
+		if cachetype == 'object':
+			self.objectcache.update((key)=obj)
+		elif cachetype == 'data':
+			self.datacache.update((key)=obj)
 		return True
 	#functions for caching nx objects
 
 	@classmethod
-	def get_from_cache(self, key):
-		if self.cache[key]:
-			return self.cache[key]
-		else:
-			return False
+	def get_from_cache(self, name=None, cachetype=None, month=None):
+		key = name + month
+		if cachetype == 'object':
+			if self.objectcache[key]:
+				return self.objectcache[key]
+			else:
+				data = get_from_cache(name, cachetype='data', month)
+				nx = make_nx_graph(data)
+				add_to_cache(name, month, cachetype='object', nx)
+				return nx
+		elif cachetype == 'data':
+			if self.datacache[key]:
+				return self.datacache[key]
+			else:
+				data = preloader(month)
+				return data
 
 	def nxgetmetrics(graph, name=None, month=None):
 		# reads out metrics from Nx object
+		# probably better as a wrapper of individual metrics
+
+	def nxmakechart(graph, name=None, month=None):
+		# prepares d3 render of Nx object
 
 	def make_nx_graph(self, data):
 		# makes a Nx object from a bunch of data
@@ -75,6 +99,16 @@ class Lobster():
 				add_meeting(vals)
 			return mgraph
 
+	@app.route('/') # the front page - equivalent to /CurrentMonth
+	def frontpage(self)
+
+	# redirects to entity_page with <month> set to current month
+
+	@app.route('/login', methods=['POST']) # login
+	def login(self)
+
+	# provides a login
+
 	@app.route('/<name>/<month>') # this is the guts of the app really
 	def entity_page(self):
 
@@ -83,27 +117,15 @@ class Lobster():
 	# important, as the front page will probably be most hit and has a defined date
 
 		@app.before_request()
-		def preloader(self, month=None):
-
-			department_weights = urllib.urlopen('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=project_lobster_constants&query=select%20*%20from%20%60departments%60')
-			personal_weights = urllib.urlopen('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=project_lobster_constants&query=select%20*%20from%20%60ministers%60')
-
-			if month:
-
-				data = urllib.urlopen(('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=sql_api_for_whoslobbying&query=*%20from%20swdata%20inner%20join%20lobbies%20on%20swdata.meeting_hash%20%3D%20lobbies.meeting_hash%20where%20date%20%3D%20{0}'.format(month)))
-	
-			else:
-				data = None
-			self.department_weights = json.load(department_weights)
-			self.personal_weights = json.load(personal_weights)
-
-		if not self.data:
-			preloader(month)
+		def check_and_preload(month):
+			if not self.datacache:
+				preloader(month)
 			
-		nxobj = self.get_from_cache(month)
+		nxobj = self.get_from_cache(name, month, cachetype='object')
 		if not nxobj:
+			data = self.get_from_cache(name, month, cachetype='data')
 			nxobj = self.make_nx_graph(data)
-			self.add_to_cache(month, nxobj)
+			self.add_to_cache(name, month, cachetype='object', nxobj)
 		metrics = nxgetmetrics(nxobj, name, month)
 
 	# makes an nx graph object

@@ -3,6 +3,7 @@
 import networkx
 import urllib2
 import json
+from itertools import groupby
 from operator import itemgetter
 
 class Lobster():
@@ -10,7 +11,8 @@ class Lobster():
 	def _init_(self):
 		self.department_weights = None
 		self.personal_weights = None
-		self.data = None
+		self.datacache = {}
+		self.objectcache = {}
 
 	@app.route('/') # the front page - equivalent to /CurrentMonth
 	def frontpage(self)
@@ -23,47 +25,67 @@ class Lobster():
 	# provides a login
 	
 	@classmethod
-	def add_to_cache(self, key, obj):
-		self.cache.update((key)=obj)
+	def add_to_cache(self, name=None, month=None, cachetype=None, obj):
+		key = name + month
+		if cachetype == 'object':
+			self.objectcache.update((key)=obj)
+		elif cachetype == 'data':
+			self.datacache.update((key)=obj)
 		return True
 	#functions for caching nx objects
 
 	@classmethod
-	def get_from_cache(self, key):
-		if self.cache[key]:
-			return self.cache[key]
-		else:
-			return False
+	def get_from_cache(self, name=None, cachetype=None, month=None):
+		key = name + month
+		if cachetype == 'object':
+			if self.objectcache[key]:
+				return self.objectcache[key]
+			else:
+				return False
+		elif cachetype == 'data':
+			if self.datacache[key]:
+				return self.datacache[key]
+			else:
+				return False
 
 	def nxgetmetrics(graph, name=None, month=None):
 		# reads out metrics from Nx object
+		# probably better as a wrapper of individual metrics
+
+	def nxmakechart(graph, name=None, month=None):
+		# prepares d3 render of Nx object
 
 	def make_nx_graph(self, data):
 		# makes a Nx object from a bunch of data
 			mgraph = networkx.MultiGraph(weighted=True)
+
 			def weighting(self, minister, department):
 				pw = self.personal_weights[minister]
 				dw = self.department_weights[department]
 				return dw/pw
-			def get_ministers_by_meeting(self, data):
-				return groupby(data, key=itemgetter('meeting_hash'))
-			def add_meeting(self, vals):
-				meeting_id = k
-					vals = list(v)
-					item = vals[0]
-					mini = item['Minister']
-					l = [value['lobby'] for value in vals]
-					lobb = [(mini)] + l
-					ranking = weighting(item['Title'], item['Department'])
-					weight = ranking/float(len(l))
-					mgraph.add_star(lobb, weight=weight, purpose=item['Purpose of meeting'], date=item['Date'], meeting_id=item['meeting_hash'])
-					mgraph.node[(mini)]['nodetype'] = 'minister'
-					mgraph.node[(mini)]['minister_weight'] = ranking
-					mgraph.node[(mini)]['Department'] = item['Department']
-					mgraph.node[(mini)]['Title'] = item['Title']
-					mgraph.add_nodes_from(l, nodetype='lobby')
 
-			meetings = get_ministers_by_meeting(data)
+			def get_ministers(data):
+				def gm(row)
+					return row
+				d = json.load(data, object_hook=gm())
+				yield gm
+
+			def add_meeting(self, vals):
+				vals = list(v)
+				item = vals[0]
+				mini = item['Minister']
+				l = [value['lobby'] for value in vals]
+				lobb = [(mini)] + l
+				ranking = weighting(item['Title'], item['Department'])
+				weight = ranking/float(len(l))
+				mgraph.add_star(lobb, weight=weight, purpose=item['Purpose of meeting'], date=item['Date'], meeting_id=item['meeting_hash'])
+				mgraph.node[(mini)]['nodetype'] = 'minister'
+				mgraph.node[(mini)]['minister_weight'] = ranking
+				mgraph.node[(mini)]['Department'] = item['Department']
+				mgraph.node[(mini)]['Title'] = item['Title']
+				mgraph.add_nodes_from(l, nodetype='lobby')
+
+			meetings = groupby(get_ministers(data), key=itemgetter('meeting_id'))
 			for k, v in meetings:
 				vals = list(v)
 				add_meeting(vals)
@@ -85,20 +107,21 @@ class Lobster():
 			if month:
 
 				data = urllib.urlopen(('https://api.scraperwiki.com/api/1.0/datastore/sqlite?format=jsondict&name=sql_api_for_whoslobbying&query=*%20from%20swdata%20inner%20join%20lobbies%20on%20swdata.meeting_hash%20%3D%20lobbies.meeting_hash%20where%20date%20%3D%20{0}'.format(month)))
+				add_to_cache(month=month, cachetype='data', data)
 	
 			else:
 				data = None
 			self.department_weights = json.load(department_weights)
 			self.personal_weights = json.load(personal_weights)
-			self.data = json.load(data)
+			
 
 		if not self.data:
 			preloader(month)
 			
-		nxobj = self.get_from_cache(month)
+		nxobj = self.get_from_cache(name, month, cachetype='object')
 		if not nxobj:
 			nxobj = self.make_nx_graph(data)
-			self.add_to_cache(month, nxobj)
+			self.add_to_cache(name, month, cachetype='object', nxobj)
 		metrics = nxgetmetrics(nxobj, name, month)
 
 	# makes an nx graph object
